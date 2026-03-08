@@ -1,0 +1,66 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build React app
+        run: npm run build
+
+      - name: Install Capacitor CLI
+        run: npm install -g @capacitor/cli
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Install CocoaPods
+        run: |
+          cd ios/App
+          pod install
+
+      - name: Build archive
+        run: |
+          cd ios/App
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -archivePath $RUNNER_TEMP/BeatNest.xcarchive \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Export IPA
+        run: |
+          mkdir -p $RUNNER_TEMP/ipa
+          cd $RUNNER_TEMP/BeatNest.xcarchive/Products/Applications
+          mkdir Payload
+          cp -r App.app Payload/
+          zip -r BeatNest.ipa Payload/
+          mv BeatNest.ipa $RUNNER_TEMP/ipa/
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v3
+        with:
+          name: BeatNest-iOS
+          path: ${{ runner.temp }}/ipa/BeatNest.ipa
+          retention-days: 30
